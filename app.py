@@ -93,12 +93,13 @@ class AddTaskModal(ModalScreen[Task | None]):
     """Modal dialog for creating a new task."""
 
     BINDINGS = [("escape", "cancel", "Cancel")]
+    AUTO_FOCUS = "#task-title"
 
     def compose(self) -> ComposeResult:
         with Vertical(id="add-dialog"):
             yield Label("Add New Task", id="dialog-title")
             yield Label("Title")
-            yield Input(placeholder="What needs to be done?", id="task-title", autofocus=True)
+            yield Input(placeholder="What needs to be done?", id="task-title")
             yield Label("Priority")
             yield Select(
                 [("High", "high"), ("Medium", "medium"), ("Low", "low")],
