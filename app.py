@@ -5,7 +5,9 @@ from datetime import datetime
 from pathlib import Path
 
 from textual.app import App, ComposeResult
-from textual.widgets import DataTable, Footer, Header, Static
+from textual.containers import Horizontal, Vertical
+from textual.screen import ModalScreen
+from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Select, Static
 from rich.text import Text
 
 
@@ -87,6 +89,45 @@ PRIORITY_STYLES = {
 }
 
 
+class AddTaskModal(ModalScreen[Task | None]):
+    """Modal dialog for creating a new task."""
+
+    BINDINGS = [("escape", "cancel", "Cancel")]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="add-dialog"):
+            yield Label("Add New Task", id="dialog-title")
+            yield Label("Title")
+            yield Input(placeholder="What needs to be done?", id="task-title")
+            yield Label("Priority")
+            yield Select(
+                [("High", "high"), ("Medium", "medium"), ("Low", "low")],
+                value="medium",
+                id="task-priority",
+            )
+            yield Label("Tags (comma-separated)")
+            yield Input(placeholder="work, personal, urgent...", id="task-tags")
+            with Horizontal(id="dialog-buttons"):
+                yield Button("Add Task", variant="success", id="btn-add")
+                yield Button("Cancel", variant="default", id="btn-cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-add":
+            title = self.query_one("#task-title", Input).value.strip()
+            if not title:
+                self.notify("Title cannot be empty", severity="error")
+                return
+            priority = self.query_one("#task-priority", Select).value
+            tags_raw = self.query_one("#task-tags", Input).value.strip()
+            tags = [t.strip() for t in tags_raw.split(",") if t.strip()] if tags_raw else []
+            self.dismiss(Task(title=title, priority=str(priority), tags=tags))
+        else:
+            self.dismiss(None)
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
 class TaskManagerApp(App):
     """A TUI task manager built with Textual."""
 
@@ -94,6 +135,7 @@ class TaskManagerApp(App):
     CSS_PATH = "app.tcss"
 
     BINDINGS = [
+        ("a", "add_task", "Add"),
         ("q", "quit", "Quit"),
     ]
 
@@ -148,6 +190,15 @@ class TaskManagerApp(App):
         pending = total - done
         status = self.query_one("#status-bar", Static)
         status.update(f" {pending} pending / {done} done / {total} total")
+
+
+    def action_add_task(self) -> None:
+        def on_result(task: Task | None) -> None:
+            if task is not None:
+                self.store.add(task)
+                self._refresh_table()
+                self.notify(f"Added: {task.title}")
+        self.push_screen(AddTaskModal(), on_result)
 
 
 if __name__ == "__main__":
