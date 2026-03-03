@@ -98,7 +98,7 @@ class AddTaskModal(ModalScreen[Task | None]):
         with Vertical(id="add-dialog"):
             yield Label("Add New Task", id="dialog-title")
             yield Label("Title")
-            yield Input(placeholder="What needs to be done?", id="task-title")
+            yield Input(placeholder="What needs to be done?", id="task-title", autofocus=True)
             yield Label("Priority")
             yield Select(
                 [("High", "high"), ("Medium", "medium"), ("Low", "low")],
@@ -171,6 +171,7 @@ class TaskManagerApp(App):
 
     def compose(self) -> ComposeResult:
         yield Header()
+        yield Static("No tasks yet. Press 'a' to add one.", id="empty-message")
         yield DataTable(id="task-table", cursor_type="row", zebra_stripes=True)
         yield Static(id="status-bar")
         yield Footer()
@@ -186,17 +187,22 @@ class TaskManagerApp(App):
 
     def _refresh_table(self) -> None:
         table = self.query_one("#task-table", DataTable)
+        empty = self.query_one("#empty-message", Static)
         table.clear()
+        has_tasks = len(self.store.tasks) > 0
+        table.display = has_tasks
+        empty.display = not has_tasks
         for task in self.store.sorted_tasks():
             icon, style = PRIORITY_STYLES.get(task.priority, ("!! ", "yellow"))
             done_marker = "[x]" if task.done else "[ ]"
+            created = datetime.fromisoformat(task.created_at).strftime("%b %d")
             if task.done:
                 row = [
                     Text(icon, style="dim"),
                     Text(done_marker, style="dim"),
                     Text(task.title, style="dim strike"),
                     Text(", ".join(task.tags), style="dim"),
-                    Text(task.created_at[:10], style="dim"),
+                    Text(created, style="dim"),
                 ]
             else:
                 row = [
@@ -204,7 +210,7 @@ class TaskManagerApp(App):
                     Text(done_marker),
                     Text(task.title, style="bold" if task.priority == "high" else ""),
                     Text(", ".join(task.tags), style="italic"),
-                    Text(task.created_at[:10]),
+                    Text(created),
                 ]
             table.add_row(*row, key=task.id)
         self._update_status()
@@ -215,7 +221,6 @@ class TaskManagerApp(App):
         pending = total - done
         status = self.query_one("#status-bar", Static)
         status.update(f" {pending} pending / {done} done / {total} total")
-
 
     def action_add_task(self) -> None:
         def on_result(task: Task | None) -> None:
@@ -230,7 +235,12 @@ class TaskManagerApp(App):
         if table.row_count == 0:
             return
         row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
-        self.store.toggle(str(row_key.value))
+        task_id = str(row_key.value)
+        self.store.toggle(task_id)
+        task = next((t for t in self.store.tasks if t.id == task_id), None)
+        if task:
+            status = "done" if task.done else "pending"
+            self.notify(f"Marked '{task.title}' as {status}")
         self._refresh_table()
 
     def action_delete_task(self) -> None:
