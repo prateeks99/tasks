@@ -228,7 +228,6 @@ class TaskManagerApp(App):
             if task is not None:
                 self.store.add(task)
                 self._refresh_table()
-                self.notify(f"Added: {task.title}")
         self.push_screen(AddTaskModal(), on_result)
 
     def action_toggle_task(self) -> None:
@@ -238,16 +237,11 @@ class TaskManagerApp(App):
         row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
         task_id = str(row_key.value)
         self.store.toggle(task_id)
-        task = next((t for t in self.store.tasks if t.id == task_id), None)
-        if task:
-            status = "done" if task.done else "pending"
-            self.notify(f"Marked '{task.title}' as {status}")
         self._refresh_table()
 
     def action_delete_task(self) -> None:
         table = self.query_one("#task-table", DataTable)
         if table.row_count == 0:
-            self.notify("No tasks to delete", severity="warning")
             return
         row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
         task_id = str(row_key.value)
@@ -257,7 +251,6 @@ class TaskManagerApp(App):
             if confirmed:
                 self.store.delete(task_id)
                 self._refresh_table()
-                self.notify(f"Deleted: {task_title}")
         self.push_screen(ConfirmModal(f"Delete '{task_title}'?"), on_confirm)
 
 
