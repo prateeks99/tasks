@@ -1,0 +1,16 @@
+Screen {
+    layout: vertical;
+}
+
+#task-table {
+    height: 1fr;
+    margin: 0 1;
+}
+
+#status-bar {
+    height: 1;
+    dock: bottom;
+    background: $primary-background;
+    color: $text;
+    padding: 0 1;
+}

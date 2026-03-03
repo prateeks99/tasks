@@ -5,7 +5,8 @@ from datetime import datetime
 from pathlib import Path
 
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer
+from textual.widgets import DataTable, Footer, Header, Static
+from rich.text import Text
 
 
 @dataclass
@@ -79,10 +80,18 @@ class TaskStore:
         )
 
 
+PRIORITY_STYLES = {
+    "high": ("!!!", "bold red"),
+    "medium": ("!! ", "yellow"),
+    "low": ("!  ", "dim green"),
+}
+
+
 class TaskManagerApp(App):
     """A TUI task manager built with Textual."""
 
     TITLE = "Tasks"
+    CSS_PATH = "app.tcss"
 
     BINDINGS = [
         ("q", "quit", "Quit"),
@@ -95,7 +104,50 @@ class TaskManagerApp(App):
 
     def compose(self) -> ComposeResult:
         yield Header()
+        yield DataTable(id="task-table", cursor_type="row", zebra_stripes=True)
+        yield Static(id="status-bar")
         yield Footer()
+
+    def on_mount(self) -> None:
+        table = self.query_one("#task-table", DataTable)
+        table.add_column("Prio", key="priority", width=5)
+        table.add_column("Done", key="done", width=6)
+        table.add_column("Title", key="title")
+        table.add_column("Tags", key="tags", width=20)
+        table.add_column("Created", key="created", width=12)
+        self._refresh_table()
+
+    def _refresh_table(self) -> None:
+        table = self.query_one("#task-table", DataTable)
+        table.clear()
+        for task in self.store.sorted_tasks():
+            icon, style = PRIORITY_STYLES.get(task.priority, ("!! ", "yellow"))
+            done_marker = "[x]" if task.done else "[ ]"
+            if task.done:
+                row = [
+                    Text(icon, style="dim"),
+                    Text(done_marker, style="dim"),
+                    Text(task.title, style="dim strike"),
+                    Text(", ".join(task.tags), style="dim"),
+                    Text(task.created_at[:10], style="dim"),
+                ]
+            else:
+                row = [
+                    Text(icon, style=style),
+                    Text(done_marker),
+                    Text(task.title, style="bold" if task.priority == "high" else ""),
+                    Text(", ".join(task.tags), style="italic"),
+                    Text(task.created_at[:10]),
+                ]
+            table.add_row(*row, key=task.id)
+        self._update_status()
+
+    def _update_status(self) -> None:
+        total = len(self.store.tasks)
+        done = sum(1 for t in self.store.tasks if t.done)
+        pending = total - done
+        status = self.query_one("#status-bar", Static)
+        status.update(f" {pending} pending / {done} done / {total} total")
 
 
 if __name__ == "__main__":
