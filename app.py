@@ -128,6 +128,29 @@ class AddTaskModal(ModalScreen[Task | None]):
         self.dismiss(None)
 
 
+class ConfirmModal(ModalScreen[bool]):
+    """Simple yes/no confirmation dialog."""
+
+    BINDINGS = [("escape", "cancel", "Cancel")]
+
+    def __init__(self, message: str) -> None:
+        self.message = message
+        super().__init__()
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="confirm-dialog"):
+            yield Label(self.message, id="confirm-message")
+            with Horizontal(id="confirm-buttons"):
+                yield Button("Yes", variant="error", id="btn-yes")
+                yield Button("No", variant="default", id="btn-no")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(event.button.id == "btn-yes")
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+
 class TaskManagerApp(App):
     """A TUI task manager built with Textual."""
 
@@ -136,6 +159,8 @@ class TaskManagerApp(App):
 
     BINDINGS = [
         ("a", "add_task", "Add"),
+        ("d", "delete_task", "Delete"),
+        ("space", "toggle_task", "Toggle Done"),
         ("q", "quit", "Quit"),
     ]
 
@@ -199,6 +224,30 @@ class TaskManagerApp(App):
                 self._refresh_table()
                 self.notify(f"Added: {task.title}")
         self.push_screen(AddTaskModal(), on_result)
+
+    def action_toggle_task(self) -> None:
+        table = self.query_one("#task-table", DataTable)
+        if table.row_count == 0:
+            return
+        row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
+        self.store.toggle(str(row_key.value))
+        self._refresh_table()
+
+    def action_delete_task(self) -> None:
+        table = self.query_one("#task-table", DataTable)
+        if table.row_count == 0:
+            self.notify("No tasks to delete", severity="warning")
+            return
+        row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
+        task_id = str(row_key.value)
+        task_title = next((t.title for t in self.store.tasks if t.id == task_id), "this task")
+
+        def on_confirm(confirmed: bool) -> None:
+            if confirmed:
+                self.store.delete(task_id)
+                self._refresh_table()
+                self.notify(f"Deleted: {task_title}")
+        self.push_screen(ConfirmModal(f"Delete '{task_title}'?"), on_confirm)
 
 
 if __name__ == "__main__":
